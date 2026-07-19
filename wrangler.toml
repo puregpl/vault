@@ -1,6 +1,7 @@
-name = "vault-auth"
-main = "worker.js"
-compatibility_date = "2025-01-01"
+ALLOWED_ORIGIN = "https://puregpl.github.io"   # origin only, no path
+PUBLIC_BASE    = "https://pub-a7bf9aa86560423ebd45586e311f4822.r2.dev"   # your bucket's public URL
+ALLOWED_USERS  = "puregpl"                     # GitHub logins that may write
 
-[vars]
-ALLOWED_ORIGIN = "https://puregpl.github.io"
+[[r2_buckets]]
+binding     = "BUCKET"
+bucket_name = "puregpl-files"
