@@ -1,0 +1,11 @@
+name = "vault-auth"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+[vars]
+# The exact origin of your Vault page. No trailing slash.
+ALLOWED_ORIGIN = "https://YOURNAME.github.io"
+
+# Secrets are NOT stored here. Set them with:
+#   npx wrangler secret put GITHUB_CLIENT_ID
+#   npx wrangler secret put GITHUB_CLIENT_SECRET

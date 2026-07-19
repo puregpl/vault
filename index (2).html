@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vault — GPL file manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#141b1d;
+  --paper:#eceae3;
+  --slab:#1e2628;
+  --brass:#c8a24a;
+  --moss:#4a7a5c;
+  --rust:#a8452e;
+  --hair:rgba(20,27,29,.16);
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --disp:'Space Grotesk',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--mono);
+  font-size:14px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px 80px}
+
+/* ---- masthead ---- */
+header{
+  border-bottom:2px solid var(--ink);
+  padding:34px 0 18px;
+  margin-bottom:0;
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:24px;
+  flex-wrap:wrap;
+}
+.brand{display:flex;align-items:baseline;gap:14px}
+h1{
+  font-family:var(--disp);
+  font-weight:700;
+  font-size:34px;
+  letter-spacing:-.03em;
+  margin:0;
+}
+.brand small{
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.18em;
+  opacity:.55;
+}
+.conn{
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.14em;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--rust);flex:none}
+.dot.on{background:var(--moss)}
+
+/* ---- panels ---- */
+.panel{
+  border-bottom:1px solid var(--hair);
+  padding:26px 0;
+}
+.panel h2{
+  font-family:var(--disp);
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:.18em;
+  font-weight:600;
+  margin:0 0 16px;
+  opacity:.6;
+}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.grid .full{grid-column:1/-1}
+@media(max-width:760px){.grid{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.grid{grid-template-columns:1fr}}
+
+label{
+  display:block;
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.14em;
+  opacity:.55;
+  margin-bottom:5px;
+}
+input[type=text],input[type=password]{
+  width:100%;
+  font-family:var(--mono);
+  font-size:13px;
+  padding:9px 11px;
+  border:1px solid var(--hair);
+  border-radius:2px;
+  background:rgba(255,255,255,.6);
+  color:var(--ink);
+}
+select{width:100%;font-family:var(--mono);font-size:13px;padding:9px 11px;border:1px solid var(--hair);border-radius:2px;background:rgba(255,255,255,.6);color:var(--ink)}
+input:focus,select:focus{outline:2px solid var(--brass);outline-offset:-1px;border-color:transparent}
+.who{display:flex;align-items:center;gap:12px}
+.who img{border-radius:50%;background:var(--hair);flex:none}
+.who button{margin-left:auto}
+
+button{
+  font-family:var(--mono);
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:.1em;
+  padding:9px 16px;
+  border:1px solid var(--ink);
+  border-radius:2px;
+  background:var(--ink);
+  color:var(--paper);
+  cursor:pointer;
+}
+button:hover{background:var(--slab)}
+button.ghost{background:transparent;color:var(--ink)}
+button.ghost:hover{background:rgba(20,27,29,.07)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+
+/* ---- dropzone ---- */
+.drop{
+  border:1.5px dashed var(--hair);
+  border-radius:3px;
+  padding:34px 20px;
+  text-align:center;
+  cursor:pointer;
+  transition:background .15s,border-color .15s;
+}
+.drop:hover,.drop.hot{border-color:var(--brass);background:rgba(200,162,74,.09)}
+.drop strong{font-family:var(--disp);font-size:15px;display:block;margin-bottom:4px}
+.drop span{font-size:12px;opacity:.55}
+
+/* ---- queue ---- */
+.q{margin-top:14px;display:flex;flex-direction:column;gap:6px}
+.qi{
+  display:flex;align-items:center;gap:12px;
+  padding:9px 12px;
+  background:rgba(255,255,255,.55);
+  border-left:2px solid var(--brass);
+  font-size:12px;
+}
+.qi .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qi .st{font-size:10px;text-transform:uppercase;letter-spacing:.12em;opacity:.6}
+.qi.ok{border-left-color:var(--moss)}
+.qi.err{border-left-color:var(--rust)}
+
+/* ---- table ---- */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{
+  text-align:left;
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.14em;
+  opacity:.5;
+  font-weight:500;
+  padding:0 10px 9px;
+  border-bottom:1px solid var(--ink);
+}
+td{padding:11px 10px;border-bottom:1px solid var(--hair);vertical-align:middle}
+tr:hover td{background:rgba(255,255,255,.5)}
+.fname{font-weight:500}
+.sz{opacity:.55;white-space:nowrap;font-size:12px}
+.acts{display:flex;gap:6px;justify-content:flex-end}
+.acts button{padding:5px 10px;font-size:10px}
+.acts button.del{border-color:var(--rust);color:var(--rust)}
+.acts button.del:hover{background:var(--rust);color:var(--paper)}
+.empty{padding:44px 10px;text-align:center;opacity:.5;font-size:13px}
+.crumb{font-size:12px;margin-bottom:12px;opacity:.7}
+.crumb a{color:inherit;cursor:pointer;text-decoration:underline}
+
+.toast{
+  position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+  background:var(--ink);color:var(--paper);
+  padding:11px 20px;border-radius:2px;font-size:12px;
+  letter-spacing:.05em;z-index:50;
+}
+.hint{font-size:11px;opacity:.5;margin-top:10px;line-height:1.6}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="brand">
+    <h1>Vault</h1>
+    <small>GPL file manager</small>
+  </div>
+  <div class="conn"><span class="dot" id="dot"></span><span id="connTxt">Not connected</span></div>
+</header>
+
+<section class="panel" id="authPanel">
+  <h2>Sign in</h2>
+  <div id="signedOut">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button id="oauth">Sign in with GitHub</button>
+      <button id="showPat" class="ghost">Use an access token instead</button>
+    </div>
+    <div id="patBox" style="display:none;margin-top:16px;max-width:520px">
+      <label for="tok">Fine-grained token, contents read &amp; write</label>
+      <div style="display:flex;gap:8px">
+        <input type="password" id="tok" placeholder="github_pat_...">
+        <button id="patGo">Use</button>
+      </div>
+      <p class="hint">Stored in this browser only. Nothing is sent anywhere except GitHub.</p>
+    </div>
+  </div>
+  <div id="signedIn" style="display:none">
+    <div class="who">
+      <img id="avatar" alt="" width="34" height="34">
+      <div>
+        <div id="login" class="fname"></div>
+        <div id="authKind" class="hint" style="margin:0"></div>
+      </div>
+      <button id="signout" class="ghost">Sign out</button>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="repoPanel" style="display:none">
+  <h2>Repository</h2>
+  <div class="grid">
+    <div class="full" style="max-width:420px">
+      <label for="repoPick">Pick a repository</label>
+      <select id="repoPick"><option value="">Loading…</option></select>
+    </div>
+    <div><label for="branch">Branch</label><input type="text" id="branch" value="main"></div>
+    <div><label for="path">Folder</label><input type="text" id="path" placeholder="files"></div>
+    <div style="display:flex;align-items:flex-end"><button id="open">Open</button></div>
+  </div>
+  <p class="hint" id="repoNote"></p>
+</section>
+
+<section class="panel">
+  <h2>Upload</h2>
+  <div class="drop" id="drop">
+    <strong>Drop .zip files here</strong>
+    <span>or click to pick them — files over 25 MB will be rejected by the API</span>
+    <input type="file" id="picker" multiple accept=".zip" hidden>
+  </div>
+  <div class="q" id="queue"></div>
+</section>
+
+<section class="panel">
+  <h2>Files</h2>
+  <div class="crumb" id="crumb"></div>
+  <table>
+    <thead><tr><th>Name</th><th>Size</th><th style="text-align:right">Actions</th></tr></thead>
+    <tbody id="rows"><tr><td colspan="3" class="empty">Sign in to browse your files.</td></tr></tbody>
+  </table>
+</section>
+
+</div>
+
+<script>
+/* ============================================================
+   Vault — GitHub-backed file manager
+   Auth: OAuth (device-free, via a tiny worker) or fine-grained PAT
+   ============================================================ */
+
+// Point this at your deployed Cloudflare Worker.
+const WORKER   = 'https://vault-auth.YOURNAME.workers.dev';
+const CLIENT_ID = 'Iv1.YOUR_CLIENT_ID';
+
+const $ = id => document.getElementById(id);
+const API = 'https://api.github.com';
+
+let auth = null;   // { token, refresh, expires, kind, login, avatar }
+let cfg  = null;   // { owner, repo, branch, path }
+
+/* ---------- storage ---------- */
+const store = {
+  get(){ try { return JSON.parse(localStorage.getItem('vault.auth') || 'null'); } catch { return null; } },
+  set(a){ localStorage.setItem('vault.auth', JSON.stringify(a)); },
+  clear(){ localStorage.removeItem('vault.auth'); }
+};
+
+function toast(msg){
+  const el = document.createElement('div');
+  el.className = 'toast'; el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+function setStatus(ok, txt){
+  $('dot').classList.toggle('on', ok);
+  $('connTxt').textContent = txt;
+}
+
+/* ---------- token lifecycle ---------- */
+async function validToken(){
+  if(!auth) throw new Error('Not signed in');
+  // OAuth App tokens and PATs have no refresh cycle
+  if(auth.kind !== 'app' || !auth.refresh) return auth.token;
+  // refresh a GitHub App user token two minutes before it lapses
+  if(Date.now() < auth.expires - 120000) return auth.token;
+
+  const res = await fetch(WORKER + '/refresh', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ refresh_token: auth.refresh })
+  });
+  if(!res.ok){ signOut(); throw new Error('Session expired — sign in again'); }
+  const d = await res.json();
+  auth.token   = d.access_token;
+  auth.refresh = d.refresh_token || auth.refresh;
+  auth.expires = Date.now() + (d.expires_in || 28800) * 1000;
+  store.set(auth);
+  return auth.token;
+}
+
+async function gh(path, opts = {}){
+  const token = await validToken();
+  const res = await fetch(API + path, {
+    ...opts,
+    headers:{
+      'Accept':'application/vnd.github+json',
+      'Authorization':'Bearer ' + token,
+      ...(opts.headers || {})
+    }
+  });
+  if(res.status === 401){ signOut(); throw new Error('Access was revoked — sign in again'); }
+  if(!res.ok){
+    const b = await res.json().catch(() => ({}));
+    throw new Error(b.message || res.status + ' ' + res.statusText);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+/* ---------- oauth ---------- */
+$('oauth').addEventListener('click', () => {
+  const state = crypto.randomUUID();
+  sessionStorage.setItem('vault.state', state);
+  const url = new URL('https://github.com/login/oauth/authorize');
+  url.searchParams.set('client_id', CLIENT_ID);
+  url.searchParams.set('redirect_uri', location.origin + location.pathname);
+  url.searchParams.set('state', state);
+  url.searchParams.set('scope', 'repo');
+  location.href = url.toString();
+});
+
+async function finishOAuth(){
+  const q = new URLSearchParams(location.search);
+  const code = q.get('code'), state = q.get('state');
+  if(!code) return false;
+  history.replaceState({}, '', location.pathname);
+
+  if(state !== sessionStorage.getItem('vault.state')){
+    toast('Sign-in blocked: state mismatch.');
+    return false;
+  }
+  sessionStorage.removeItem('vault.state');
+  setStatus(false, 'Finishing sign-in…');
+
+  const res = await fetch(WORKER + '/exchange', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ code })
+  });
+  if(!res.ok){ toast('Sign-in failed. Check the worker is deployed.'); return false; }
+  const d = await res.json();
+
+  auth = {
+    kind: d.refresh_token ? 'app' : 'oauth',
+    token: d.access_token,
+    refresh: d.refresh_token || null,
+    expires: Date.now() + (d.expires_in || 0) * 1000
+  };
+  store.set(auth);
+  return true;
+}
+
+/* ---------- pat fallback ---------- */
+$('showPat').addEventListener('click', () => {
+  const b = $('patBox');
+  b.style.display = b.style.display === 'none' ? 'block' : 'none';
+});
+$('patGo').addEventListener('click', async () => {
+  const t = $('tok').value.trim();
+  if(!t) return toast('Paste a token first.');
+  auth = { kind:'pat', token:t, refresh:null, expires:0 };
+  try { await identify(); store.set(auth); $('tok').value = ''; }
+  catch(e){ auth = null; toast(e.message); }
+});
+
+/* ---------- identity ---------- */
+async function identify(){
+  const me = await gh('/user');
+  auth.login = me.login;
+  auth.avatar = me.avatar_url;
+  store.set(auth);
+
+  $('signedOut').style.display = 'none';
+  $('signedIn').style.display = 'block';
+  $('avatar').src = me.avatar_url;
+  $('login').textContent = me.login;
+  $('authKind').textContent =
+    auth.kind === 'app'  ? 'Signed in with GitHub — session renews automatically' :
+    auth.kind === 'oauth'? 'Signed in with GitHub — stays valid until you revoke it' :
+                           'Signed in with a personal access token';
+  $('repoPanel').style.display = 'block';
+  setStatus(true, 'Signed in as ' + me.login);
+  loadRepos();
+}
+
+function signOut(){
+  auth = null; cfg = null;
+  store.clear();
+  $('signedOut').style.display = 'block';
+  $('signedIn').style.display = 'none';
+  $('repoPanel').style.display = 'none';
+  $('crumb').textContent = '';
+  $('rows').innerHTML = '<tr><td colspan="3" class="empty">Sign in to browse your files.</td></tr>';
+  setStatus(false, 'Signed out');
+}
+$('signout').addEventListener('click', signOut);
+
+/* ---------- repositories ---------- */
+async function loadRepos(){
+  const sel = $('repoPick');
+  sel.innerHTML = '<option value="">Loading…</option>';
+  try{
+    const repos = await gh('/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator');
+    const saved = JSON.parse(localStorage.getItem('vault.repo') || '{}');
+    sel.innerHTML = '<option value="">Choose a repository…</option>';
+    repos.forEach(r => {
+      const o = document.createElement('option');
+      o.value = r.full_name;
+      o.textContent = r.full_name + (r.private ? '  · private' : '');
+      o.dataset.private = r.private;
+      o.dataset.branch = r.default_branch;
+      sel.appendChild(o);
+    });
+    if(saved.owner){
+      sel.value = saved.owner + '/' + saved.repo;
+      $('branch').value = saved.branch || 'main';
+      $('path').value = saved.path || '';
+      if(sel.value) openRepo();
+    }
+  }catch(e){
+    sel.innerHTML = '<option value="">' + e.message + '</option>';
+  }
+}
+
+$('repoPick').addEventListener('change', e => {
+  const o = e.target.selectedOptions[0];
+  if(!o || !o.value) return;
+  $('branch').value = o.dataset.branch || 'main';
+  $('repoNote').textContent = o.dataset.private === 'true'
+    ? 'This repo is private — raw download links will not work for the public.'
+    : '';
+});
+
+$('open').addEventListener('click', openRepo);
+
+function openRepo(){
+  const full = $('repoPick').value;
+  if(!full) return toast('Pick a repository first.');
+  const [owner, repo] = full.split('/');
+  cfg = {
+    owner, repo,
+    branch: $('branch').value.trim() || 'main',
+    path: $('path').value.trim().replace(/^\/+|\/+$/g, '')
+  };
+  localStorage.setItem('vault.repo', JSON.stringify(cfg));
+  listFiles();
+}
+
+/* ---------- paths ---------- */
+const enc = p => p.split('/').map(encodeURIComponent).join('/');
+const contentsUrl = () =>
+  `/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path ? enc(cfg.path) : ''}?ref=${cfg.branch}`;
+const rawUrl = name =>
+  `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch}/${cfg.path ? cfg.path + '/' : ''}${encodeURIComponent(name)}`;
+
+/* ---------- list ---------- */
+function fmt(b){
+  if(b < 1024) return b + ' B';
+  if(b < 1048576) return (b/1024).toFixed(0) + ' KB';
+  return (b/1048576).toFixed(1) + ' MB';
+}
+
+async function listFiles(){
+  if(!cfg) return;
+  $('crumb').textContent = `${cfg.owner}/${cfg.repo} · ${cfg.branch} · /${cfg.path || ''}`;
+  try{
+    const items = await gh(contentsUrl());
+    const files = (Array.isArray(items) ? items : []).filter(i => i.type === 'file');
+    if(!files.length){
+      $('rows').innerHTML = '<tr><td colspan="3" class="empty">No files here yet. Drop one above to start.</td></tr>';
+      return;
+    }
+    $('rows').innerHTML = '';
+    files.sort((a,b) => a.name.localeCompare(b.name)).forEach(f => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td class="fname"></td><td class="sz">${fmt(f.size)}</td>
+        <td><div class="acts">
+          <button class="ghost copy">Copy link</button>
+          <button class="ghost dl">Download</button>
+          <button class="ghost del">Delete</button>
+        </div></td>`;
+      tr.querySelector('.fname').textContent = f.name;
+      const url = rawUrl(f.name);
+      tr.querySelector('.copy').onclick = () => navigator.clipboard.writeText(url).then(() => toast('Link copied.'));
+      tr.querySelector('.dl').onclick   = () => window.open(url, '_blank');
+      tr.querySelector('.del').onclick  = () => remove(f);
+      $('rows').appendChild(tr);
+    });
+  }catch(e){
+    $('rows').innerHTML = '<tr><td colspan="3" class="empty"></td></tr>';
+    $('rows').querySelector('.empty').textContent = e.message;
+  }
+}
+
+/* ---------- delete ---------- */
+async function remove(f){
+  if(!confirm('Delete ' + f.name + ' from the repo?')) return;
+  try{
+    await gh(`/repos/${cfg.owner}/${cfg.repo}/contents/${enc(f.path)}`, {
+      method:'DELETE',
+      body: JSON.stringify({ message:'Remove ' + f.name, sha:f.sha, branch:cfg.branch })
+    });
+    toast('Deleted ' + f.name);
+    listFiles();
+  }catch(e){ toast(e.message); }
+}
+
+/* ---------- upload ---------- */
+const drop = $('drop'), picker = $('picker');
+drop.addEventListener('click', () => picker.click());
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('hot'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('hot'));
+drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('hot'); handle([...e.dataTransfer.files]); });
+picker.addEventListener('change', () => { handle([...picker.files]); picker.value = ''; });
+
+function toB64(file){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = () => rej(new Error('Could not read file'));
+    r.readAsDataURL(file);
+  });
+}
+
+async function handle(files){
+  if(!auth) return toast('Sign in first.');
+  if(!cfg)  return toast('Open a repository first.');
+  for(const file of files){
+    const row = document.createElement('div');
+    row.className = 'qi';
+    row.innerHTML = '<span class="nm"></span><span class="st">Uploading</span>';
+    row.querySelector('.nm').textContent = file.name;
+    $('queue').appendChild(row);
+    const st = row.querySelector('.st');
+
+    if(file.size > 25 * 1024 * 1024){
+      row.className = 'qi err'; st.textContent = 'Too large — 25 MB limit';
+      continue;
+    }
+    try{
+      const target = (cfg.path ? cfg.path + '/' : '') + file.name;
+      let sha;
+      try { sha = (await gh(`/repos/${cfg.owner}/${cfg.repo}/contents/${enc(target)}?ref=${cfg.branch}`)).sha; } catch {}
+      await gh(`/repos/${cfg.owner}/${cfg.repo}/contents/${enc(target)}`, {
+        method:'PUT',
+        body: JSON.stringify({
+          message: (sha ? 'Update ' : 'Add ') + file.name,
+          content: await toB64(file),
+          branch: cfg.branch,
+          ...(sha ? { sha } : {})
+        })
+      });
+      row.className = 'qi ok'; st.textContent = sha ? 'Replaced' : 'Uploaded';
+      listFiles();
+    }catch(e){
+      row.className = 'qi err'; st.textContent = e.message;
+    }
+  }
+}
+
+/* ---------- boot ---------- */
+(async function boot(){
+  setStatus(false, 'Not signed in');
+  const fresh = await finishOAuth();
+  if(!fresh) auth = store.get();
+  if(auth){
+    try { await identify(); }
+    catch(e){ signOut(); toast(e.message); }
+  }
+})();
+</script>
+</body>
+</html>
