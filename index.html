@@ -107,6 +107,15 @@ input:focus,select:focus{outline:2px solid var(--brass);outline-offset:-1px;bord
 .who{display:flex;align-items:center;gap:12px}
 .who img{border-radius:50%;background:var(--hair);flex:none}
 .who button{margin-left:auto}
+.stats{display:flex;gap:44px;flex-wrap:wrap}
+.stats>div{display:flex;flex-direction:column;gap:2px}
+.figure{font-family:var(--disp);font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1}
+.tag{font-size:10px;text-transform:uppercase;letter-spacing:.14em;opacity:.5}
+.qi{flex-wrap:wrap}
+.bar{flex-basis:100%;height:2px;background:var(--hair);margin-top:7px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--brass);transition:width .12s linear}
+.qi.ok .bar i{background:var(--moss)}
+.qi.err .bar i{background:var(--rust)}
 
 button{
   font-family:var(--mono);
@@ -227,24 +236,19 @@ tr:hover td{background:rgba(255,255,255,.5)}
 </section>
 
 <section class="panel" id="repoPanel" style="display:none">
-  <h2>Repository</h2>
-  <div class="grid">
-    <div class="full" style="max-width:420px">
-      <label for="repoPick">Pick a repository</label>
-      <select id="repoPick"><option value="">Loading…</option></select>
-    </div>
-    <div><label for="branch">Branch</label><input type="text" id="branch" value="main"></div>
-    <div><label for="path">Folder</label><input type="text" id="path" placeholder="files"></div>
-    <div style="display:flex;align-items:flex-end"><button id="open">Open</button></div>
+  <h2>Storage</h2>
+  <div class="stats">
+    <div><span class="figure" id="statCount">0</span><span class="tag">files</span></div>
+    <div><span class="figure" id="statSize">0 B</span><span class="tag">stored</span></div>
+    <div><span class="figure" id="statBase">—</span><span class="tag">served from</span></div>
   </div>
-  <p class="hint" id="repoNote"></p>
 </section>
 
 <section class="panel">
   <h2>Upload</h2>
   <div class="drop" id="drop">
     <strong>Drop .zip files here</strong>
-    <span>or click to pick them — files over 25 MB will be rejected by the API</span>
+    <span>or click to pick them — any size, uploaded straight to your bucket</span>
     <input type="file" id="picker" multiple accept=".zip" hidden>
   </div>
   <div class="q" id="queue"></div>
@@ -254,8 +258,8 @@ tr:hover td{background:rgba(255,255,255,.5)}
   <h2>Files</h2>
   <div class="crumb" id="crumb"></div>
   <table>
-    <thead><tr><th>Name</th><th>Size</th><th style="text-align:right">Actions</th></tr></thead>
-    <tbody id="rows"><tr><td colspan="3" class="empty">Sign in to browse your files.</td></tr></tbody>
+    <thead><tr><th>Name</th><th>Size</th><th>Uploaded</th><th style="text-align:right">Actions</th></tr></thead>
+    <tbody id="rows"><tr><td colspan="4" class="empty">Sign in to browse your files.</td></tr></tbody>
   </table>
 </section>
 
@@ -408,7 +412,7 @@ async function identify(){
                            'Signed in with a personal access token';
   $('repoPanel').style.display = 'block';
   setStatus(true, 'Signed in as ' + me.login);
-  loadRepos();
+  listFiles();
 }
 
 function signOut(){
@@ -418,117 +422,96 @@ function signOut(){
   $('signedIn').style.display = 'none';
   $('repoPanel').style.display = 'none';
   $('crumb').textContent = '';
-  $('rows').innerHTML = '<tr><td colspan="3" class="empty">Sign in to browse your files.</td></tr>';
+  $('rows').innerHTML = '<tr><td colspan="4" class="empty">Sign in to browse your files.</td></tr>';
   setStatus(false, 'Signed out');
 }
 $('signout').addEventListener('click', signOut);
 
-/* ---------- repositories ---------- */
-async function loadRepos(){
-  const sel = $('repoPick');
-  sel.innerHTML = '<option value="">Loading…</option>';
-  try{
-    const repos = await gh('/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator');
-    const saved = JSON.parse(localStorage.getItem('vault.repo') || '{}');
-    sel.innerHTML = '<option value="">Choose a repository…</option>';
-    repos.forEach(r => {
-      const o = document.createElement('option');
-      o.value = r.full_name;
-      o.textContent = r.full_name + (r.private ? '  · private' : '');
-      o.dataset.private = r.private;
-      o.dataset.branch = r.default_branch;
-      sel.appendChild(o);
-    });
-    if(saved.owner){
-      sel.value = saved.owner + '/' + saved.repo;
-      $('branch').value = saved.branch || 'main';
-      $('path').value = saved.path || '';
-      if(sel.value) openRepo();
-    }
-  }catch(e){
-    sel.innerHTML = '<option value="">' + e.message + '</option>';
+/* ---------- storage api ---------- */
+let publicBase = '';
+
+async function api(path, opts = {}){
+  const token = await validToken();
+  const res = await fetch(WORKER + path, {
+    ...opts,
+    headers: { 'Authorization': 'Bearer ' + token, ...(opts.headers || {}) }
+  });
+  if(res.status === 401){ signOut(); throw new Error('Session ended — sign in again'); }
+  if(!res.ok){
+    const b = await res.json().catch(() => ({}));
+    throw new Error(b.error || 'Request failed (' + res.status + ')');
   }
+  return res.json();
 }
 
-$('repoPick').addEventListener('change', e => {
-  const o = e.target.selectedOptions[0];
-  if(!o || !o.value) return;
-  $('branch').value = o.dataset.branch || 'main';
-  $('repoNote').textContent = o.dataset.private === 'true'
-    ? 'This repo is private — raw download links will not work for the public.'
-    : '';
-});
-
-$('open').addEventListener('click', openRepo);
-
-function openRepo(){
-  const full = $('repoPick').value;
-  if(!full) return toast('Pick a repository first.');
-  const [owner, repo] = full.split('/');
-  cfg = {
-    owner, repo,
-    branch: $('branch').value.trim() || 'main',
-    path: $('path').value.trim().replace(/^\/+|\/+$/g, '')
-  };
-  localStorage.setItem('vault.repo', JSON.stringify(cfg));
-  listFiles();
-}
-
-/* ---------- paths ---------- */
-const enc = p => p.split('/').map(encodeURIComponent).join('/');
-const contentsUrl = () =>
-  `/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path ? enc(cfg.path) : ''}?ref=${cfg.branch}`;
-const rawUrl = name =>
-  `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch}/${cfg.path ? cfg.path + '/' : ''}${encodeURIComponent(name)}`;
-
-/* ---------- list ---------- */
 function fmt(b){
   if(b < 1024) return b + ' B';
   if(b < 1048576) return (b/1024).toFixed(0) + ' KB';
-  return (b/1048576).toFixed(1) + ' MB';
+  if(b < 1073741824) return (b/1048576).toFixed(1) + ' MB';
+  return (b/1073741824).toFixed(2) + ' GB';
 }
+function ago(iso){
+  if(!iso) return '—';
+  const d = Math.floor((Date.now() - new Date(iso)) / 86400000);
+  if(d === 0) return 'today';
+  if(d === 1) return 'yesterday';
+  if(d < 30) return d + ' days ago';
+  return new Date(iso).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
+}
+const publicUrl = key => publicBase.replace(/\/+$/,'') + '/' + key.split('/').map(encodeURIComponent).join('/');
 
+/* ---------- list ---------- */
 async function listFiles(){
-  if(!cfg) return;
-  $('crumb').textContent = `${cfg.owner}/${cfg.repo} · ${cfg.branch} · /${cfg.path || ''}`;
+  if(!auth) return;
   try{
-    const items = await gh(contentsUrl());
-    const files = (Array.isArray(items) ? items : []).filter(i => i.type === 'file');
+    const data = await api('/files');
+    publicBase = data.base || '';
+    const files = data.files || [];
+
+    $('statCount').textContent = files.length;
+    $('statSize').textContent  = fmt(files.reduce((n,f) => n + f.size, 0));
+    $('statBase').textContent  = publicBase ? publicBase.replace(/^https?:\/\//,'') : 'not set';
+    $('crumb').textContent = files.length ? '' : '';
+
     if(!files.length){
-      $('rows').innerHTML = '<tr><td colspan="3" class="empty">No files here yet. Drop one above to start.</td></tr>';
+      $('rows').innerHTML = '<tr><td colspan="4" class="empty">Nothing stored yet. Drop a file above to start.</td></tr>';
       return;
     }
     $('rows').innerHTML = '';
-    files.sort((a,b) => a.name.localeCompare(b.name)).forEach(f => {
+    files.sort((a,b) => new Date(b.uploaded) - new Date(a.uploaded)).forEach(f => {
       const tr = document.createElement('tr');
       tr.innerHTML = `<td class="fname"></td><td class="sz">${fmt(f.size)}</td>
+        <td class="sz">${ago(f.uploaded)}</td>
         <td><div class="acts">
           <button class="ghost copy">Copy link</button>
           <button class="ghost dl">Download</button>
           <button class="ghost del">Delete</button>
         </div></td>`;
-      tr.querySelector('.fname').textContent = f.name;
-      const url = rawUrl(f.name);
-      tr.querySelector('.copy').onclick = () => navigator.clipboard.writeText(url).then(() => toast('Link copied.'));
-      tr.querySelector('.dl').onclick   = () => window.open(url, '_blank');
-      tr.querySelector('.del').onclick  = () => remove(f);
+      tr.querySelector('.fname').textContent = f.key;
+      const url = publicUrl(f.key);
+      tr.querySelector('.copy').onclick = () => {
+        if(!publicBase) return toast('Set PUBLIC_BASE in wrangler.toml first.');
+        navigator.clipboard.writeText(url).then(() => toast('Link copied.'));
+      };
+      tr.querySelector('.dl').onclick  = () => {
+        if(!publicBase) return toast('Set PUBLIC_BASE in wrangler.toml first.');
+        window.open(url, '_blank');
+      };
+      tr.querySelector('.del').onclick = () => remove(f);
       $('rows').appendChild(tr);
     });
   }catch(e){
-    $('rows').innerHTML = '<tr><td colspan="3" class="empty"></td></tr>';
+    $('rows').innerHTML = '<tr><td colspan="4" class="empty"></td></tr>';
     $('rows').querySelector('.empty').textContent = e.message;
   }
 }
 
 /* ---------- delete ---------- */
 async function remove(f){
-  if(!confirm('Delete ' + f.name + ' from the repo?')) return;
+  if(!confirm('Delete ' + f.key + ' from the bucket?')) return;
   try{
-    await gh(`/repos/${cfg.owner}/${cfg.repo}/contents/${enc(f.path)}`, {
-      method:'DELETE',
-      body: JSON.stringify({ message:'Remove ' + f.name, sha:f.sha, branch:cfg.branch })
-    });
-    toast('Deleted ' + f.name);
+    await api('/files/' + f.key.split('/').map(encodeURIComponent).join('/'), { method:'DELETE' });
+    toast('Deleted ' + f.key);
     listFiles();
   }catch(e){ toast(e.message); }
 }
@@ -541,47 +524,50 @@ drop.addEventListener('dragleave', () => drop.classList.remove('hot'));
 drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('hot'); handle([...e.dataTransfer.files]); });
 picker.addEventListener('change', () => { handle([...picker.files]); picker.value = ''; });
 
-function toB64(file){
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(r.result.split(',')[1]);
-    r.onerror = () => rej(new Error('Could not read file'));
-    r.readAsDataURL(file);
+function putFile(file, token, onProgress){
+  // XHR rather than fetch, because fetch cannot report upload progress
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', WORKER + '/files/' + encodeURIComponent(file.name));
+    xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    xhr.upload.onprogress = e => { if(e.lengthComputable) onProgress(e.loaded / e.total); };
+    xhr.onload = () => {
+      let body = {};
+      try { body = JSON.parse(xhr.responseText); } catch {}
+      if(xhr.status >= 200 && xhr.status < 300) resolve(body);
+      else reject(new Error(body.error || 'Upload failed (' + xhr.status + ')'));
+    };
+    xhr.onerror = () => reject(new Error('Network dropped during upload'));
+    xhr.send(file);
   });
 }
 
 async function handle(files){
   if(!auth) return toast('Sign in first.');
-  if(!cfg)  return toast('Open a repository first.');
   for(const file of files){
     const row = document.createElement('div');
     row.className = 'qi';
-    row.innerHTML = '<span class="nm"></span><span class="st">Uploading</span>';
-    row.querySelector('.nm').textContent = file.name;
+    row.innerHTML = '<span class="nm"></span><span class="st">0%</span><span class="bar"><i></i></span>';
+    row.querySelector('.nm').textContent = file.name + '  ·  ' + fmt(file.size);
     $('queue').appendChild(row);
-    const st = row.querySelector('.st');
+    const st = row.querySelector('.st'), fill = row.querySelector('.bar i');
 
-    if(file.size > 25 * 1024 * 1024){
-      row.className = 'qi err'; st.textContent = 'Too large — 25 MB limit';
-      continue;
-    }
     try{
-      const target = (cfg.path ? cfg.path + '/' : '') + file.name;
-      let sha;
-      try { sha = (await gh(`/repos/${cfg.owner}/${cfg.repo}/contents/${enc(target)}?ref=${cfg.branch}`)).sha; } catch {}
-      await gh(`/repos/${cfg.owner}/${cfg.repo}/contents/${enc(target)}`, {
-        method:'PUT',
-        body: JSON.stringify({
-          message: (sha ? 'Update ' : 'Add ') + file.name,
-          content: await toB64(file),
-          branch: cfg.branch,
-          ...(sha ? { sha } : {})
-        })
+      const token = await validToken();
+      await putFile(file, token, p => {
+        const pct = Math.round(p * 100);
+        st.textContent = pct + '%';
+        fill.style.width = pct + '%';
       });
-      row.className = 'qi ok'; st.textContent = sha ? 'Replaced' : 'Uploaded';
+      row.className = 'qi ok';
+      st.textContent = 'Stored';
+      fill.style.width = '100%';
       listFiles();
     }catch(e){
-      row.className = 'qi err'; st.textContent = e.message;
+      row.className = 'qi err';
+      st.textContent = e.message;
+      fill.style.width = '100%';
     }
   }
 }
