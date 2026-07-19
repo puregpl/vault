@@ -458,7 +458,7 @@ function ago(iso){
   if(d < 30) return d + ' days ago';
   return new Date(iso).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
 }
-const publicUrl = key => publicBase.replace(/\/+$/,'') + '/' + key.split('/').map(encodeURIComponent).join('/');
+const publicUrl = key => WORKER.replace(/\/+$/,'') + '/d/' + key.split('/').map(encodeURIComponent).join('/');
 
 /* ---------- list ---------- */
 async function listFiles(){
@@ -470,7 +470,7 @@ async function listFiles(){
 
     $('statCount').textContent = files.length;
     $('statSize').textContent  = fmt(files.reduce((n,f) => n + f.size, 0));
-    $('statBase').textContent  = publicBase ? publicBase.replace(/^https?:\/\//,'') : 'not set';
+    $('statBase').textContent  = WORKER.replace(/^https?:\/\//,'');
     $('crumb').textContent = files.length ? '' : '';
 
     if(!files.length){
@@ -489,14 +489,8 @@ async function listFiles(){
         </div></td>`;
       tr.querySelector('.fname').textContent = f.key;
       const url = publicUrl(f.key);
-      tr.querySelector('.copy').onclick = () => {
-        if(!publicBase) return toast('Set PUBLIC_BASE in wrangler.toml first.');
-        navigator.clipboard.writeText(url).then(() => toast('Link copied.'));
-      };
-      tr.querySelector('.dl').onclick  = () => {
-        if(!publicBase) return toast('Set PUBLIC_BASE in wrangler.toml first.');
-        window.open(url, '_blank');
-      };
+      tr.querySelector('.copy').onclick = () => navigator.clipboard.writeText(url).then(() => toast('Link copied.'));
+      tr.querySelector('.dl').onclick  = () => window.open(url, '_blank');
       tr.querySelector('.del').onclick = () => remove(f);
       $('rows').appendChild(tr);
     });
