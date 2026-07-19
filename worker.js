@@ -51,6 +51,9 @@ export default {
       if (url.pathname === '/files' || url.pathname.startsWith('/files/')) {
         return await handleFiles(request, env, url, cors);
       }
+      if (url.pathname.startsWith('/d/')) {
+        return await handleDownload(request, env, url);
+      }
       return json({ error: 'No such route.' }, 404, cors);
     } catch (err) {
       return json({ error: err.message || 'Something went wrong.' }, err.status || 500, cors);
@@ -167,6 +170,58 @@ async function handleFiles(request, env, url, cors) {
   }
 
   return json({ error: 'That method is not supported here.' }, 405, cors);
+}
+
+/* -------------------------------------------------------------- download */
+/* Public. No sign-in — these are the links you hand to visitors. */
+
+async function handleDownload(request, env, url) {
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return new Response('Use GET to download.', { status: 405 });
+  }
+
+  const key = decodeURIComponent(url.pathname.slice(3));
+  if (!key || key.includes('..')) {
+    return new Response('That file name is not allowed.', { status: 400 });
+  }
+
+  // Optional: only serve when the visitor came from your own site.
+  // Leave REFERRER_ALLOW unset to serve everyone.
+  const allow = (env.REFERRER_ALLOW || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (allow.length) {
+    const ref = request.headers.get('Referer') || '';
+    if (!allow.some(host => ref.includes(host))) {
+      return new Response('This download is only available from the site it belongs to.', { status: 403 });
+    }
+  }
+
+  const range = request.headers.get('Range');
+  const object = await env.BUCKET.get(key, range ? { range: request.headers } : undefined);
+
+  if (!object) {
+    return new Response('That file is not in the vault.', { status: 404 });
+  }
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('Accept-Ranges', 'bytes');
+  headers.set('Cache-Control', 'public, max-age=86400');
+  headers.set(
+    'Content-Disposition',
+    'attachment; filename="' + key.split('/').pop().replace(/"/g, '') + '"'
+  );
+
+  // A ranged hit carries object.range; a full hit does not.
+  if (object.range) {
+    const start = object.range.offset ?? 0;
+    const len = object.range.length ?? (object.size - start);
+    headers.set('Content-Range', `bytes ${start}-${start + len - 1}/${object.size}`);
+    return new Response(request.method === 'HEAD' ? null : object.body, { status: 206, headers });
+  }
+
+  headers.set('Content-Length', String(object.size));
+  return new Response(request.method === 'HEAD' ? null : object.body, { status: 200, headers });
 }
 
 /* ----------------------------------------------------------------- utils */
